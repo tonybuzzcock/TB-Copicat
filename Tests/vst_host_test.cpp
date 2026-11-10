@@ -9,6 +9,7 @@
 
 #include "../Source/VST2/vst2_abi.h"
 #include "../Source/DSP/CopicatEcho.h"
+#include "../Source/VST2/Params.h"
 
 #include <dlfcn.h>
 #include <cmath>
@@ -157,7 +158,7 @@ int main (int argc, char** argv)
     tbcc::CopicatEcho* refp = new tbcc::CopicatEcho();
     tbcc::CopicatEcho& ref = *refp;
     ref.setGain (0.6); ref.setSwell (0.55); ref.setSustain (0.45);
-    ref.setHead (0, true); ref.setHead (1, false); ref.setHead (2, false);
+    for (int b = 0; b < 3; ++b) ref.setHead (tbcc::kButtonHead[b], b == 0);   // button 1 in
     ref.setTone (false); ref.setEchoIn (true);
     ref.setSpeed (0.5); ref.setWow (0.3); ref.setTapeAge (0.25); ref.setOutputGainDb (0.0);
     ref.prepare (sr);
@@ -219,6 +220,31 @@ int main (int argc, char** argv)
         std::printf ("  residual after 3 s of silence: %.2g\n", tail);
         e->setParameter (e, 2, 0.45f);
         check (tail < 1e-3, "silence settles to silence (tape hiss stays below -60 dB)");
+    }
+
+    // Each panel button plays the head the owner's unit has behind it
+    {
+        const double expectMs[3] = { 330.0, 110.0, 220.0 };
+        e->setParameter (e, 2, 0.0f);      // no repeats
+        e->setParameter (e, 9, 0.0f);      // no wow, so the echo lands exactly
+        for (int b = 0; b < 3; ++b)
+        {
+            for (int k = 0; k < 3; ++k) e->setParameter (e, 3 + k, k == b ? 1.0f : 0.0f);
+            std::vector<float> z (sr, 0.0f), z2 (sr, 0.0f), oa (sr), ob (sr);
+            runBlocks (e, z, z2, oa, ob, 512);                     // let the previous echoes clear
+            std::vector<float> a (sr, 0.0f), bb (sr, 0.0f);
+            for (int i = 0; i < 441; ++i) a[i] = bb[i] = (float) (0.2 * std::sin (3.14159265358979 * i / 441.0) * std::sin (2.0 * 3.14159265358979 * 1000.0 * i / sr));
+            runBlocks (e, a, bb, oa, ob, 512);
+            const int from = (int) (0.06 * sr);
+            int at = from; double best = 0.0;
+            for (int i = from; i < sr; ++i) if (std::fabs (oa[i]) > best) { best = std::fabs (oa[i]); at = i; }
+            const double ms = 1000.0 * (at - e->initialDelay) / sr - 5.0;    // burst peak sits at 5 ms
+            char msg[80];
+            std::snprintf (msg, sizeof (msg), "button %d plays the %.0f ms head (measured %.1f)", b + 1, expectMs[b], ms);
+            check (std::fabs (ms - expectMs[b]) < 4.0, msg);
+        }
+        e->setParameter (e, 3, 1.0f); e->setParameter (e, 4, 0.0f); e->setParameter (e, 5, 0.0f);
+        e->setParameter (e, 2, 0.45f); e->setParameter (e, 9, 0.3f);
     }
 
     std::printf ("\nSample-rate change to 96 kHz\n");

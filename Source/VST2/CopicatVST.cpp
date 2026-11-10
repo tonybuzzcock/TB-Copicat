@@ -319,9 +319,9 @@ private:
                 case kGain:    a.setGain (v); break;
                 case kSwell:   a.setSwell (v); break;
                 case kSustain: a.setSustain (v); break;
-                case kHead1:   a.setHead (0, on); break;
-                case kHead2:   a.setHead (1, on); break;
-                case kHead3:   a.setHead (2, on); break;
+                case kHead1:   a.setHead (kButtonHead[0], on); break;
+                case kHead2:   a.setHead (kButtonHead[1], on); break;
+                case kHead3:   a.setHead (kButtonHead[2], on); break;
                 case kTone:    a.setTone (on); break;
                 case kEcho:    a.setEchoIn (on); break;
                 case kSpeed:   a.setSpeed (v); break;

@@ -15,10 +15,10 @@ circuit drawing (drawing no. 577, 27-6-79, in `Docs/`).
 | 1 | Gain | Input gain (stands in for the four input pots) | 0 – 10 |
 | 2 | Swell | Echo level | 0 – 10 |
 | 3 | Sustain | Repeats (playback fed back to the record amp); runs away above about 8.5 | 0 – 10 |
-| 4–6 | Head 1/2/3 | Playback head buttons, any combination | In / Out |
+| 4–6 | Head 1/2/3 | Playback head buttons, any combination: button 1 = farthest head (330 ms), 2 = nearest (110 ms), 3 = middle (220 ms), as on the owner's unit | In / Out |
 | 7 | Tone | Tone switch (the 4n7 across the heads): On is darker | Off / On |
 | 8 | Echo | Echo in/out | In / Out |
-| 9 | Speed | *plugin only*: tape speed trim, shown as head 1's echo time | 149 – 81 ms |
+| 9 | Speed | *plugin only*: tape speed trim, shown as the nearest head's echo time (button 2) | 149 – 81 ms |
 | 10 | Wow&Flut | *plugin only*: wow and flutter | 0 – 10 |
 | 11 | Tape Age | *plugin only*: worn tape: duller, more hiss and dropouts, a bigger splice bump | 0 – 10 |
 | 12 | Output | *plugin only*: output trim | ±24 dB |
