@@ -101,7 +101,7 @@ int main (int argc, char** argv)
     ERect* r = 0;
     call (e, effEditGetRect, 0, 0, &r);
     check (r && r->right - r->left == kEditorWidth && r->bottom - r->top == kEditorHeight,
-           "editor size 1040 x 330");
+           "editor size 800 x 600");
 
     NSWindow* win = [[NSWindow alloc] initWithContentRect: NSMakeRect (0, 0, kEditorWidth, kEditorHeight)
                                                 styleMask: NSBorderlessWindowMask
@@ -120,53 +120,53 @@ int main (int argc, char** argv)
     // Drag the Swell knob up 50 px: +0.25
     const float g0 = e->getParameter (e, kSwell);
     automateCalls = beginCalls = endCalls = 0;
-    mouse (win, panel, NSLeftMouseDown,    NSMakePoint (305, 112));
-    mouse (win, panel, NSLeftMouseDragged, NSMakePoint (305, 87));
-    mouse (win, panel, NSLeftMouseDragged, NSMakePoint (305, 62));
-    mouse (win, panel, NSLeftMouseUp,      NSMakePoint (305, 62));
+    mouse (win, panel, NSLeftMouseDown,    NSMakePoint (620, 200));
+    mouse (win, panel, NSLeftMouseDragged, NSMakePoint (620, 175));
+    mouse (win, panel, NSLeftMouseDragged, NSMakePoint (620, 150));
+    mouse (win, panel, NSLeftMouseUp,      NSMakePoint (620, 150));
     const float g1 = e->getParameter (e, kSwell);
     std::printf ("  Swell %.2f -> %.2f\n", g0, g1);
     check (std::fabs (g1 - std::min (1.0f, g0 + 0.25f)) < 0.02f, "dragging a knob up turns it up");
     check (automateCalls > 0 && beginCalls == 1 && endCalls == 1, "host gets begin / automate / end");
 
     // Double-click returns it to default
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (305, 112), 2);
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (305, 112), 2);
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (620, 200), 2);
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (620, 200), 2);
     check (std::fabs (e->getParameter (e, kSwell) - kDefaults[kSwell]) < 1e-6f, "double-click resets a knob");
 
     // Head buttons latch in and out
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (640, 112));
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (640, 112));
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (400, 215));
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (400, 215));
     check (e->getParameter (e, kHead2) >= 0.5f, "head 2 button latches in");
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (570, 112));
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (570, 112));
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (330, 215));
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (330, 215));
     check (e->getParameter (e, kHead1) < 0.5f, "head 1 button pops out");
 
     // Rockers: Tone on (top half), Echo out (bottom half)
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (870, 102));
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (870, 102));
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (125, 365));
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (125, 365));
     check (e->getParameter (e, kTone) >= 0.5f, "Tone rocker switches on");
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (965, 122));
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (965, 122));
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (665, 385));
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (665, 385));
     check (e->getParameter (e, kEcho) < 0.5f, "Echo rocker switches out");
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (965, 102));
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (965, 102));
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (665, 365));
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (665, 365));
     check (e->getParameter (e, kEcho) >= 0.5f, "and back in");
 
     // Strip knob: Tape Age by scroll-free drag
     const float a0 = e->getParameter (e, kTapeAge);
-    mouse (win, panel, NSLeftMouseDown,    NSMakePoint (355, 296));
-    mouse (win, panel, NSLeftMouseDragged, NSMakePoint (355, 276));
-    mouse (win, panel, NSLeftMouseUp,      NSMakePoint (355, 276));
+    mouse (win, panel, NSLeftMouseDown,    NSMakePoint (450, 512));
+    mouse (win, panel, NSLeftMouseDragged, NSMakePoint (450, 492));
+    mouse (win, panel, NSLeftMouseUp,      NSMakePoint (450, 492));
     check (e->getParameter (e, kTapeAge) > a0 + 0.05f, "strip knobs turn");
 
     std::printf ("\nPresets\n");
-    #define SLOT(k) NSMakePoint (564.0 + (k) * 27.0 + 12.0, 296.0)
+    #define SLOT(k) NSMakePoint (244.0 + (k) * 27.0 + 12.0, 574.0)
     e->setParameter (e, kSustain, 0.3f);
     e->setParameter (e, kHead3, 1.0f);
     pump (0.1);
-    mouse (win, panel, NSLeftMouseDown, NSMakePoint (527, 296));    // SAVE
-    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (527, 296));
+    mouse (win, panel, NSLeftMouseDown, NSMakePoint (207, 574));    // SAVE
+    mouse (win, panel, NSLeftMouseUp,   NSMakePoint (207, 574));
     mouse (win, panel, NSLeftMouseDown, SLOT (2));                   // slot 3
     mouse (win, panel, NSLeftMouseUp,   SLOT (2));
     FILE* pf = std::fopen (presetFile.c_str(), "r");

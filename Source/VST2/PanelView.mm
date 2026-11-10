@@ -36,34 +36,38 @@ struct Ctl
     const char* posC;
 };
 
-const CGFloat kStripTop = 250.0;
+const CGFloat kStripTop = 470.0;
 
-// Main panel, left to right like the unit; then the plugin strip.
+// Main row: Gain on the left, the tape loop over the head buttons in the
+// middle, Swell and Sustain on the right. Tone and Echo below. Then the strip.
 const Ctl kCtls[] = {
-    { kGain,    kCtlKnob,      110, 112, 22, "GAIN",     0, 0, 0 },
-    { kSwell,   kCtlKnob,      305, 112, 22, "SWELL",    0, 0, 0 },
-    { kSustain, kCtlKnob,      395, 112, 22, "SUSTAIN",  0, 0, 0 },
-    { kHead1,   kCtlPush,      570, 112, 17, "HEAD 1",   "1", 0, 0 },
-    { kHead2,   kCtlPush,      640, 112, 17, "HEAD 2",   "2", 0, 0 },
-    { kHead3,   kCtlPush,      710, 112, 17, "HEAD 3",   "3", 0, 0 },
-    { kTone,    kCtlRocker,    870, 112, 0,  "TONE",     "OFF", "ON", 0 },
-    { kEcho,    kCtlRocker,    965, 112, 0,  "ECHO",     "OUT", "IN", 0 },
-    // Plugin strip
-    { kSpeed,   kCtlSmallKnob, 165, 296, 15, "SPEED",    "SLOW", "FAST", 0 },
-    { kWow,     kCtlSmallKnob, 260, 296, 15, "WOW & FLUTTER", "0", "10", 0 },
-    { kTapeAge, kCtlSmallKnob, 355, 296, 15, "TAPE AGE", "NEW", "OLD", 0 },
-    { kOutput,  kCtlSmallKnob, 450, 296, 15, "OUTPUT",   "-24", "+24", 0 },
+    { kGain,    kCtlKnob,      130, 200, 30, "GAIN",     0, 0, 0 },
+    { kSwell,   kCtlKnob,      620, 200, 26, "SWELL",    0, 0, 0 },
+    { kSustain, kCtlKnob,      730, 200, 26, "SUSTAIN",  0, 0, 0 },
+    { kHead1,   kCtlPush,      330, 215, 20, "HEAD 1",   "1", 0, 0 },
+    { kHead2,   kCtlPush,      400, 215, 20, "HEAD 2",   "2", 0, 0 },
+    { kHead3,   kCtlPush,      470, 215, 20, "HEAD 3",   "3", 0, 0 },
+    { kTone,    kCtlRocker,    125, 375, 0,  "TONE",     "OFF", "ON", 0 },
+    { kEcho,    kCtlRocker,    665, 375, 0,  "ECHO",     "OUT", "IN", 0 },
+    // Plugin strip: transport knobs, presets underneath
+    { kSpeed,   kCtlSmallKnob, 210, 512, 15, "SPEED",    "SLOW", "FAST", 0 },
+    { kWow,     kCtlSmallKnob, 330, 512, 15, "WOW & FLUTTER", "0", "10", 0 },
+    { kTapeAge, kCtlSmallKnob, 450, 512, 15, "TAPE AGE", "NEW", "OLD", 0 },
+    { kOutput,  kCtlSmallKnob, 570, 512, 15, "OUTPUT",   "-24", "+24", 0 },
 };
 
-// Preset section in the strip: a SAVE button and slots 1..8, then the readout
-const NSRect kSaveRect = { { 500.0, 284.0 }, { 54.0, 24.0 } };
-const CGFloat kSlotX0 = 564.0, kSlotPitch = 27.0, kSlotW = 24.0, kSlotY = 284.0, kSlotH = 24.0;
-const NSRect kReadoutRect = { { 792.0, 276.0 }, { 234.0, 40.0 } };
+// Preset row under the strip knobs: SAVE and slots 1..8; the readout to the right
+const NSRect kSaveRect = { { 180.0, 562.0 }, { 54.0, 24.0 } };
+const CGFloat kSlotX0 = 244.0, kSlotPitch = 27.0, kSlotW = 24.0, kSlotY = 562.0, kSlotH = 24.0;
+const NSRect kReadoutRect = { { 490.0, 552.0 }, { 296.0, 40.0 } };
 
-// Animated tape loop, top centre above the head buttons: a reel and a capstan
-const NSRect kSpoolRect = { { 560.0, 31.0 }, { 160.0, 56.0 } };
+// Animated tape loop, centred above the head buttons. Drawn in its own
+// coordinates (reel and capstan below) and scaled into place.
 const CGFloat kReelX = 597.0, kReelY = 59.0, kReelR = 18.0;
 const CGFloat kCapX = 688.0, kCapY = 59.0, kCapR = 9.0;
+const CGFloat kSpoolSrcX = 640.0, kSpoolSrcY = 59.0;          // centre of the loop drawing
+const CGFloat kSpoolX = 400.0, kSpoolY = 115.0, kSpoolScale = 1.6;
+const NSRect kSpoolRect = { { 400.0 - 130.0, 115.0 - 47.0 }, { 260.0, 94.0 } };
 const double kTapePxPerSec = 36.0;     // on-screen tape speed at normal Speed
 const double kFrameRate = 30.0;
 
@@ -250,29 +254,34 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
     [border setLineWidth: 1.0];
     [border stroke];
 
-    // Section dividers and titles
+    // Section dividers and titles: three columns, a rule above the switch row
     NSColor* ink = [NSColor blackColor];
-    const CGFloat dividers[] = { 215.0, 490.0, 795.0 };
-    for (int i = 0; i < 3; ++i)
+    [rgb (60, 62, 65) set];
     {
-        NSBezierPath* p = [NSBezierPath bezierPath];
-        [p moveToPoint: NSMakePoint (dividers[i] + 0.5, 22)];
-        [p lineToPoint: NSMakePoint (dividers[i] + 0.5, 232)];
-        [rgb (60, 62, 65) set];
-        [p setLineWidth: 1.0];
-        [p stroke];
+        const CGFloat lines[][4] = {
+            { 255.5, 22, 255.5, 456 }, { 545.5, 22, 545.5, 456 },
+            { 22, 300.5, 255, 300.5 }, { 256, 300.5, 545, 300.5 }, { 546, 300.5, 778, 300.5 },
+        };
+        for (int i = 0; i < 5; ++i)
+        {
+            NSBezierPath* p = [NSBezierPath bezierPath];
+            [p moveToPoint: NSMakePoint (lines[i][0], lines[i][1])];
+            [p lineToPoint: NSMakePoint (lines[i][2], lines[i][3])];
+            [p setLineWidth: 1.0];
+            [p stroke];
+        }
     }
-    drawText ("INPUT", boldFont (12.0), ink, 110, 22);
-    drawText ("ECHO", boldFont (12.0), ink, 350, 22);
-    drawText ("PLAYBACK HEADS", boldFont (12.0), ink, 640, 22);
+    drawText ("INPUT", boldFont (12.0), ink, 130, 26);
+    drawText ("PLAYBACK HEADS", boldFont (12.0), ink, 400, 26);
+    drawText ("ECHO", boldFont (12.0), ink, 675, 26);
 
-    // Nameplate under the switches
-    drawText ("TAPE ECHO", boldFont (10.0), ink, 917, 198);
-    drawText ("IC 300", plainFont (10.0), ink, 917, 213);
+    // Nameplate in the middle of the switch row
+    drawText ("TAPE ECHO", boldFont (15.0), ink, 400, 366);
+    drawText ("IC 300", plainFont (13.0), ink, 400, 388);
 
     // Owner's mark in the strip's corner: red TB over "Electronic", straight on the silver
     {
-        const NSRect plate = NSMakeRect (14.5, 262.5, 100.0, 56.0);
+        const NSRect plate = NSMakeRect (24.5, 507.5, 100.0, 56.0);
         drawText ("TB", markBoldFont (28.0), rgb (200, 30, 30), NSMidX (plate), plate.origin.y + 21.0);
         drawText ("Electronic", markPlainFont (12.0), ink, NSMidX (plate), plate.origin.y + 44.0);
     }
@@ -451,7 +460,7 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
 - (void) drawPresets
 {
     NSColor* ink = [NSColor blackColor];
-    drawText ("PRESETS", boldFont (10.0), ink, (NSMinX (kSaveRect) + NSMaxX (slotRect (kNumPresetSlots - 1))) * 0.5, 266);
+    drawText ("PRESETS", boldFont (10.0), ink, (NSMinX (kSaveRect) + NSMaxX (slotRect (kNumPresetSlots - 1))) * 0.5, NSMinY (kSaveRect) - 10.0);
 
     // SAVE button: lit red while it is waiting for a slot
     NSBezierPath* sp = [NSBezierPath bezierPathWithRoundedRect: kSaveRect xRadius: 3 yRadius: 3];
@@ -491,6 +500,18 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
 // The tape loop: brown tape round a spoked reel and a capstan with its rubber
 // roller, three small heads under the top run (lit orange when their button is in).
 - (void) drawSpool
+{
+    [NSGraphicsContext saveGraphicsState];
+    NSAffineTransform* xf = [NSAffineTransform transform];
+    [xf translateXBy: kSpoolX yBy: kSpoolY];
+    [xf scaleBy: kSpoolScale];
+    [xf translateXBy: -kSpoolSrcX yBy: -kSpoolSrcY];
+    [xf concat];
+    [self drawSpoolUnscaled];
+    [NSGraphicsContext restoreGraphicsState];
+}
+
+- (void) drawSpoolUnscaled
 {
     NSColor* tapeCol = rgb (96, 56, 28);
 

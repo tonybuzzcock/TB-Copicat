@@ -46,11 +46,13 @@ The echo times are the easiest thing to change if they don't match a real unit
 
 ## The panel
 
-On the Mac the plugin opens its own panel (1040 × 330): an original design laid
-out like the unit's controls, with the tape-transport controls, presets and the
-readout in a strip along the bottom. Drag knobs up/down (hold Shift for fine
+On the Mac the plugin opens its own panel (800 × 600, 4:3): Gain on the left,
+an animated tape loop over the three head buttons in the middle (it runs at the
+Speed setting and wavers with Wow & Flutter; each head lights when its button
+is in), Swell and Sustain on the right, Tone and Echo below. The strip along the
+bottom has the tape-transport knobs with the presets and readout underneath. Drag knobs up/down (hold Shift for fine
 control), double-click a knob to reset it, or use the scroll wheel. Click a head
-button to latch it in or out. Rocker switches: press the top half for On/In, the
+button to latch it in (orange) or out. Rocker switches: press the top half for On/In, the
 bottom half for Off/Out.
 
 **Presets:** click SAVE, then a slot 1–8. Click a saved slot to recall it. Presets
