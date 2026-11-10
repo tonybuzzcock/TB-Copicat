@@ -40,10 +40,10 @@ const float kDefaults[kNumParams] = {
 
 const double kOutputRangeDb = 24.0;
 
-// Which tape head each panel button plays, as on the owner's unit. Heads are
-// numbered from the record head outwards (0 = shortest echo, see kHeadSeconds):
-// button 1 = farthest head, button 2 = nearest, button 3 = middle.
-const int kButtonHead[3] = { 2, 0, 1 };
+// Which tape head each panel button plays. Heads are numbered from the record
+// head outwards (0 = shortest echo, see kHeadSeconds): button 1 = nearest head,
+// 2 = middle, 3 = farthest, as on the owner's unit.
+const int kButtonHead[3] = { 0, 1, 2 };
 
 inline bool isOn (float v) { return v >= 0.5f; }
 

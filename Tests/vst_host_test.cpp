@@ -224,7 +224,7 @@ int main (int argc, char** argv)
 
     // Each panel button plays the head the owner's unit has behind it
     {
-        const double expectMs[3] = { 330.0, 110.0, 220.0 };
+        const double expectMs[3] = { 110.0, 220.0, 330.0 };
         e->setParameter (e, 2, 0.0f);      // no repeats
         e->setParameter (e, 9, 0.0f);      // no wow, so the echo lands exactly
         for (int b = 0; b < 3; ++b)
