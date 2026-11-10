@@ -1,0 +1,11 @@
+Tests/copicat_test
+Tests/renders/
+*.o
+.DS_Store
+build/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+Tests/vst_host_test
+Tests/TBCopicat.so
+Tests/preset_test

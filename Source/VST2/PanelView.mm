@@ -1,0 +1,692 @@
+// PanelView.mm
+// The custom panel for TB Copicat IC300: an original design laid out like the
+// echo unit's controls. Opaque silver, black lettering, grey knurled knobs with
+// a red position line, three latching head buttons, rocker switches for Tone
+// and Echo in/out, and a strip of tape-transport controls, presets and the
+// readout along the bottom.
+//
+// Cocoa, manual retain/release, and only APIs that exist in Mac OS X 10.8.
+// Everything is drawn in code; no image files.
+
+#import <Cocoa/Cocoa.h>
+
+#include "Editor.h"
+#include "Params.h"
+#include "Presets.h"
+
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+
+using namespace tbcc;
+
+namespace
+{
+
+enum CtlType { kCtlKnob, kCtlPush, kCtlRocker, kCtlSmallKnob };
+
+struct Ctl
+{
+    int param;
+    int type;
+    CGFloat cx, cy, r;
+    const char* label;
+    const char* posA;      // selector / rocker / slide labels
+    const char* posB;
+    const char* posC;
+};
+
+const CGFloat kStripTop = 250.0;
+
+// Main panel, left to right like the unit; then the plugin strip.
+const Ctl kCtls[] = {
+    { kGain,    kCtlKnob,      110, 112, 22, "GAIN",     0, 0, 0 },
+    { kSwell,   kCtlKnob,      305, 112, 22, "SWELL",    0, 0, 0 },
+    { kSustain, kCtlKnob,      395, 112, 22, "SUSTAIN",  0, 0, 0 },
+    { kHead1,   kCtlPush,      570, 112, 17, "HEAD 1",   "1", 0, 0 },
+    { kHead2,   kCtlPush,      640, 112, 17, "HEAD 2",   "2", 0, 0 },
+    { kHead3,   kCtlPush,      710, 112, 17, "HEAD 3",   "3", 0, 0 },
+    { kTone,    kCtlRocker,    870, 112, 0,  "TONE",     "OFF", "ON", 0 },
+    { kEcho,    kCtlRocker,    965, 112, 0,  "ECHO",     "OUT", "IN", 0 },
+    // Plugin strip
+    { kSpeed,   kCtlSmallKnob, 165, 296, 15, "SPEED",    "SLOW", "FAST", 0 },
+    { kWow,     kCtlSmallKnob, 260, 296, 15, "WOW & FLUTTER", "0", "10", 0 },
+    { kTapeAge, kCtlSmallKnob, 355, 296, 15, "TAPE AGE", "NEW", "OLD", 0 },
+    { kOutput,  kCtlSmallKnob, 450, 296, 15, "OUTPUT",   "-24", "+24", 0 },
+};
+
+// Preset section in the strip: a SAVE button and slots 1..8, then the readout
+const NSRect kSaveRect = { { 500.0, 284.0 }, { 54.0, 24.0 } };
+const CGFloat kSlotX0 = 564.0, kSlotPitch = 27.0, kSlotW = 24.0, kSlotY = 284.0, kSlotH = 24.0;
+const NSRect kReadoutRect = { { 792.0, 276.0 }, { 234.0, 40.0 } };
+
+inline NSRect slotRect (int k) { return NSMakeRect (kSlotX0 + k * kSlotPitch, kSlotY, kSlotW, kSlotH); }
+const int kNumCtls = (int) (sizeof (kCtls) / sizeof (kCtls[0]));
+
+// Pointer angle (radians, 0 = up, clockwise positive) for a 0..1 value.
+inline CGFloat valueAngle (CGFloat v) { return (CGFloat) ((-150.0 + 300.0 * v) * M_PI / 180.0); }
+
+// Point at angle a (0 = up, clockwise) and radius r around (cx, cy) in flipped coordinates.
+inline NSPoint polar (CGFloat cx, CGFloat cy, CGFloat r, CGFloat a)
+{
+    return NSMakePoint (cx + r * std::sin (a), cy - r * std::cos (a));
+}
+
+NSColor* rgb (int r, int g, int b) { return [NSColor colorWithCalibratedRed: r / 255.0 green: g / 255.0 blue: b / 255.0 alpha: 1.0]; }
+
+NSFont* boldFont (CGFloat size)
+{
+    NSFont* f = [NSFont fontWithName: @"Helvetica-Bold" size: size];
+    return f ? f : [NSFont boldSystemFontOfSize: size];
+}
+
+NSFont* plainFont (CGFloat size)
+{
+    NSFont* f = [NSFont fontWithName: @"Helvetica" size: size];
+    return f ? f : [NSFont systemFontOfSize: size];
+}
+
+// First installed font from a list of PostScript names, else the fallback.
+NSFont* firstFont (const char* const* names, int count, CGFloat size, NSFont* fallback)
+{
+    for (int i = 0; i < count; ++i)
+    {
+        NSFont* f = [NSFont fontWithName: [NSString stringWithUTF8String: names[i]] size: size];
+        if (f) return f;
+    }
+    return fallback;
+}
+
+// Eurostile for the TB mark when it is installed (it cannot be bundled), else Helvetica.
+NSFont* markBoldFont (CGFloat size)
+{
+    const char* const names[] = { "Eurostile-Bold", "EurostileBold", "Eurostile-Heavy", "EurostileLTStd-Bold", "EurostileT-Bold" };
+    return firstFont (names, 5, size, boldFont (size));
+}
+
+NSFont* markPlainFont (CGFloat size)
+{
+    const char* const names[] = { "Eurostile", "Eurostile-Regular", "EurostileLTStd", "EurostileT-Regular" };
+    return firstFont (names, 4, size, plainFont (size));
+}
+
+void drawText (const char* s, NSFont* font, NSColor* color, CGFloat cx, CGFloat cy)
+{
+    NSString* str = [NSString stringWithUTF8String: s];
+    NSDictionary* attrs = [NSDictionary dictionaryWithObjectsAndKeys:
+                             font, NSFontAttributeName, color, NSForegroundColorAttributeName, nil];
+    const NSSize sz = [str sizeWithAttributes: attrs];
+    [str drawAtPoint: NSMakePoint (cx - sz.width * 0.5, cy - sz.height * 0.5) withAttributes: attrs];
+}
+
+void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFloat cy)
+{
+    NSString* str = [NSString stringWithUTF8String: s];
+    NSDictionary* attrs = [NSDictionary dictionaryWithObjectsAndKeys:
+                             font, NSFontAttributeName, color, NSForegroundColorAttributeName, nil];
+    const NSSize sz = [str sizeWithAttributes: attrs];
+    [str drawAtPoint: NSMakePoint (x, cy - sz.height * 0.5) withAttributes: attrs];
+}
+
+} // namespace
+
+//==============================================================================
+@interface TBCopicatPanelView : NSView
+{
+    EditorHost* host;
+    float shown[kNumParams];
+    NSTimer* timer;
+    int dragCtl;
+    CGFloat dragStartY, dragStartValue;
+    int readoutParam;
+    bool saveMode;
+    int activePreset;
+    bool presetUsed[kNumPresetSlots];
+    char status[64];
+}
+- (id) initWithFrame: (NSRect) frame host: (EditorHost*) h;
+- (void) shutdown;
+@end
+
+@implementation TBCopicatPanelView
+
+- (id) initWithFrame: (NSRect) frame host: (EditorHost*) h
+{
+    self = [super initWithFrame: frame];
+    if (self)
+    {
+        host = h;
+        for (int i = 0; i < kNumParams; ++i) shown[i] = host->getParam (i);
+        dragCtl = -1;
+        readoutParam = -1;
+        saveMode = false;
+        activePreset = -1;
+        status[0] = 0;
+        host->refreshPresets();
+        for (int k = 0; k < kNumPresetSlots; ++k) presetUsed[k] = host->presetExists (k);
+        timer = [[NSTimer timerWithTimeInterval: 1.0 / 20.0 target: self selector: @selector (tick:)
+                                       userInfo: nil repeats: YES] retain];
+        [[NSRunLoop currentRunLoop] addTimer: timer forMode: NSDefaultRunLoopMode];
+        [[NSRunLoop currentRunLoop] addTimer: timer forMode: NSEventTrackingRunLoopMode];
+    }
+    return self;
+}
+
+- (void) shutdown
+{
+    if (timer) { [timer invalidate]; [timer release]; timer = nil; }
+    host = 0;
+}
+
+- (void) dealloc
+{
+    [self shutdown];
+    [super dealloc];
+}
+
+- (BOOL) isFlipped { return YES; }
+- (BOOL) isOpaque { return YES; }
+- (BOOL) acceptsFirstMouse: (NSEvent*) e { (void) e; return YES; }
+
+// Host-side changes (automation, presets) redraw the panel.
+- (void) tick: (NSTimer*) t
+{
+    (void) t;
+    if (! host) return;
+    bool changed = false;
+    for (int i = 0; i < kNumParams; ++i)
+    {
+        const float v = host->getParam (i);
+        if (v != shown[i]) { shown[i] = v; changed = true; }
+    }
+    if (changed) [self setNeedsDisplay: YES];
+}
+
+//------------------------------------------------------------------------------
+// Drawing
+
+- (void) drawBackground
+{
+    const NSRect b = [self bounds];
+
+    // Opaque silver faceplate
+    NSGradient* face = [[[NSGradient alloc] initWithStartingColor: rgb (222, 224, 227)
+                                                      endingColor: rgb (184, 188, 192)] autorelease];
+    [face drawInRect: NSMakeRect (0, 0, b.size.width, kStripTop) angle: 90.0];
+
+    // Plugin strip, a slightly darker silver
+    NSGradient* strip = [[[NSGradient alloc] initWithStartingColor: rgb (196, 199, 203)
+                                                       endingColor: rgb (166, 170, 175)] autorelease];
+    [strip drawInRect: NSMakeRect (0, kStripTop, b.size.width, b.size.height - kStripTop) angle: 90.0];
+
+    [rgb (40, 40, 42) set];
+    NSRectFill (NSMakeRect (0, kStripTop, b.size.width, 2.0));
+    [rgb (238, 240, 242) set];
+    NSRectFill (NSMakeRect (0, kStripTop + 2.0, b.size.width, 1.0));
+
+    // Fine border around the faceplate
+    NSBezierPath* border = [NSBezierPath bezierPathWithRect: NSInsetRect (NSMakeRect (0, 0, b.size.width, kStripTop), 6.5, 6.5)];
+    [rgb (70, 72, 75) set];
+    [border setLineWidth: 1.0];
+    [border stroke];
+
+    // Section dividers and titles
+    NSColor* ink = [NSColor blackColor];
+    const CGFloat dividers[] = { 215.0, 490.0, 795.0 };
+    for (int i = 0; i < 3; ++i)
+    {
+        NSBezierPath* p = [NSBezierPath bezierPath];
+        [p moveToPoint: NSMakePoint (dividers[i] + 0.5, 22)];
+        [p lineToPoint: NSMakePoint (dividers[i] + 0.5, 232)];
+        [rgb (60, 62, 65) set];
+        [p setLineWidth: 1.0];
+        [p stroke];
+    }
+    drawText ("INPUT", boldFont (12.0), ink, 110, 22);
+    drawText ("ECHO", boldFont (12.0), ink, 350, 22);
+    drawText ("PLAYBACK HEADS", boldFont (12.0), ink, 640, 22);
+
+    // Nameplate under the switches
+    drawText ("TAPE ECHO", boldFont (10.0), ink, 917, 198);
+    drawText ("IC 300", plainFont (10.0), ink, 917, 213);
+
+    // Owner's mark in the strip's corner: red TB over "Electronic", straight on the silver
+    {
+        const NSRect plate = NSMakeRect (14.5, 262.5, 100.0, 56.0);
+        drawText ("TB", markBoldFont (28.0), rgb (200, 30, 30), NSMidX (plate), plate.origin.y + 21.0);
+        drawText ("Electronic", markPlainFont (12.0), ink, NSMidX (plate), plate.origin.y + 44.0);
+    }
+}
+
+- (void) drawScaleForCtl: (const Ctl&) c
+{
+    NSColor* ink = [NSColor blackColor];
+    for (int i = 0; i < 11; ++i)
+    {
+        const CGFloat a = valueAngle (i / 10.0);
+        NSBezierPath* t = [NSBezierPath bezierPath];
+        [t moveToPoint: polar (c.cx, c.cy, c.r + 4.0, a)];
+        [t lineToPoint: polar (c.cx, c.cy, c.r + 9.0, a)];
+        [t setLineWidth: 1.2];
+        [ink set];
+        [t stroke];
+
+        char num[4];
+        std::snprintf (num, sizeof (num), "%d", i);
+        const NSPoint p = polar (c.cx, c.cy, c.r + 15.0, a);
+        drawText (num, plainFont (8.5), ink, p.x, p.y);
+    }
+}
+
+// Grey knurled knob with a red position line.
+- (void) drawKnobAt: (NSPoint) ctr radius: (CGFloat) r value: (CGFloat) v
+{
+    // Drop shadow
+    [NSGraphicsContext saveGraphicsState];
+    NSShadow* sh = [[[NSShadow alloc] init] autorelease];
+    [sh setShadowOffset: NSMakeSize (1.5, -2.5)];
+    [sh setShadowBlurRadius: 4.0];
+    [sh setShadowColor: [NSColor colorWithCalibratedWhite: 0.0 alpha: 0.45]];
+    [sh set];
+    [rgb (90, 93, 97) set];
+    [[NSBezierPath bezierPathWithOvalInRect: NSMakeRect (ctr.x - r, ctr.y - r, 2 * r, 2 * r)] fill];
+    [NSGraphicsContext restoreGraphicsState];
+
+    // Knurled skirt: alternating ridges around the rim
+    const int ridges = 40;
+    for (int k = 0; k < ridges; ++k)
+    {
+        const CGFloat a0 = (CGFloat) (2.0 * M_PI * k / ridges);
+        const CGFloat a1 = (CGFloat) (2.0 * M_PI * (k + 0.5) / ridges);
+        NSBezierPath* w = [NSBezierPath bezierPath];
+        [w moveToPoint: ctr];
+        [w lineToPoint: polar (ctr.x, ctr.y, r, a0)];
+        [w lineToPoint: polar (ctr.x, ctr.y, r, a1)];
+        [w closePath];
+        // light from the top left
+        const CGFloat lit = 0.5 + 0.5 * std::cos (a0 + 0.8);
+        [[NSColor colorWithCalibratedWhite: 0.40 + 0.22 * lit alpha: 1.0] set];
+        [w fill];
+    }
+
+    // Top cap
+    const CGFloat rc = r * 0.78;
+    NSGradient* cap = [[[NSGradient alloc] initWithStartingColor: rgb (172, 175, 179)
+                                                     endingColor: rgb (104, 107, 111)] autorelease];
+    NSBezierPath* capPath = [NSBezierPath bezierPathWithOvalInRect: NSMakeRect (ctr.x - rc, ctr.y - rc, 2 * rc, 2 * rc)];
+    [cap drawInBezierPath: capPath angle: -60.0];
+    [rgb (70, 72, 75) set];
+    [capPath setLineWidth: 0.8];
+    [capPath stroke];
+
+    // Red position line
+    const CGFloat a = valueAngle (v);
+    NSBezierPath* line = [NSBezierPath bezierPath];
+    [line moveToPoint: polar (ctr.x, ctr.y, r * 0.18, a)];
+    [line lineToPoint: polar (ctr.x, ctr.y, r * 0.98, a)];
+    [line setLineWidth: r > 18.0 ? 3.0 : 2.4];
+    [line setLineCapStyle: NSRoundLineCapStyle];
+    [rgb (200, 30, 30) set];
+    [line stroke];
+}
+
+// Latching push button (head select): a cream cap in a dark well; pressed in = head on.
+- (void) drawPush: (const Ctl&) c
+{
+    NSColor* ink = [NSColor blackColor];
+    const bool in = isOn (shown[c.param]);
+    const CGFloat h = c.r;     // half-size of the cap
+    const NSRect well = NSMakeRect (c.cx - h - 5, c.cy - h - 5, 2 * h + 10, 2 * h + 10);
+    NSBezierPath* wp = [NSBezierPath bezierPathWithRoundedRect: well xRadius: 4 yRadius: 4];
+    [rgb (35, 36, 38) set];
+    [wp fill];
+
+    const CGFloat inset = in ? 2.5 : 0.0;
+    const NSRect cap = NSMakeRect (c.cx - h + inset, c.cy - h + inset - (in ? 0.0 : 1.5), 2 * (h - inset), 2 * (h - inset));
+    NSBezierPath* cp = [NSBezierPath bezierPathWithRoundedRect: cap xRadius: 3 yRadius: 3];
+    [NSGraphicsContext saveGraphicsState];
+    if (! in)
+    {
+        NSShadow* sh = [[[NSShadow alloc] init] autorelease];
+        [sh setShadowOffset: NSMakeSize (0.0, -2.0)];
+        [sh setShadowBlurRadius: 2.5];
+        [sh setShadowColor: [NSColor colorWithCalibratedWhite: 0.0 alpha: 0.6]];
+        [sh set];
+    }
+    NSGradient* g = in
+        ? [[[NSGradient alloc] initWithStartingColor: rgb (206, 200, 184) endingColor: rgb (186, 180, 164)] autorelease]
+        : [[[NSGradient alloc] initWithStartingColor: rgb (246, 242, 230) endingColor: rgb (208, 202, 186)] autorelease];
+    [g drawInBezierPath: cp angle: -90.0];
+    [NSGraphicsContext restoreGraphicsState];
+    [rgb (90, 88, 82) set];
+    [cp setLineWidth: 0.8];
+    [cp stroke];
+    drawText (c.posA, boldFont (14.0), ink, NSMidX (cap), NSMidY (cap));
+}
+
+// Rocker switch: the pressed-in end is the active position.
+- (void) drawRocker: (const Ctl&) c
+{
+    NSColor* ink = [NSColor blackColor];
+    const bool on = isOn (shown[c.param]);
+    const CGFloat w = 22.0, h = 36.0;
+    const NSRect bezel = NSMakeRect (c.cx - w * 0.5 - 4, c.cy - h * 0.5 - 4, w + 8, h + 8);
+
+    NSBezierPath* bz = [NSBezierPath bezierPathWithRoundedRect: bezel xRadius: 4 yRadius: 4];
+    [rgb (35, 36, 38) set];
+    [bz fill];
+
+    const NSRect top = NSMakeRect (c.cx - w * 0.5, c.cy - h * 0.5, w, h * 0.5);
+    const NSRect bot = NSMakeRect (c.cx - w * 0.5, c.cy, w, h * 0.5);
+    // The raised half is lighter; ON = top half pressed in
+    NSGradient* raised = [[[NSGradient alloc] initWithStartingColor: rgb (120, 122, 126) endingColor: rgb (66, 68, 71)] autorelease];
+    NSGradient* pressed = [[[NSGradient alloc] initWithStartingColor: rgb (40, 41, 43) endingColor: rgb (58, 60, 63)] autorelease];
+    [(on ? pressed : raised) drawInRect: top angle: on ? 90.0 : -90.0];
+    [(on ? raised : pressed) drawInRect: bot angle: on ? 90.0 : -90.0];
+
+    // Markings on the rocker: a bar for ON, a ring for OFF
+    [[NSColor colorWithCalibratedWhite: 0.92 alpha: 1.0] set];
+    NSRectFill (NSMakeRect (c.cx - 1.0, c.cy - h * 0.5 + 5, 2.0, 8.0));
+    NSBezierPath* ring = [NSBezierPath bezierPathWithOvalInRect: NSMakeRect (c.cx - 4, c.cy + h * 0.5 - 13, 8, 8)];
+    [ring setLineWidth: 1.6];
+    [ring stroke];
+
+    drawText (c.label, boldFont (10.0), ink, c.cx, c.cy - h * 0.5 - 14.0);
+    drawTextLeft (c.posB, boldFont (9.0), ink, c.cx + w * 0.5 + 8.0, c.cy - h * 0.25);
+    drawTextLeft (c.posA, boldFont (9.0), ink, c.cx + w * 0.5 + 8.0, c.cy + h * 0.25);
+}
+
+- (void) drawReadout
+{
+    const NSRect box = kReadoutRect;
+    NSBezierPath* p = [NSBezierPath bezierPathWithRoundedRect: box xRadius: 4 yRadius: 4];
+    // Fluorescent lime green, like the original unit's E.L. panel, glowing brighter at the centre
+    NSGradient* glow = [[[NSGradient alloc] initWithStartingColor: rgb (206, 255, 120)
+                                                      endingColor: rgb (150, 232, 70)] autorelease];
+    [glow drawInBezierPath: p relativeCenterPosition: NSMakePoint (0.0, 0.0)];
+    [rgb (60, 62, 65) set];
+    [p setLineWidth: 1.0];
+    [p stroke];
+
+    if (status[0])
+    {
+        drawText (status, boldFont (14.0), [NSColor blackColor], NSMidX (box), NSMidY (box));
+    }
+    else if (readoutParam >= 0 && host)
+    {
+        char disp[16] = { 0 };
+        host->getParamDisplay (readoutParam, disp);
+        char text[96];
+        const char* name = 0;
+        for (int i = 0; i < kNumCtls; ++i)
+            if (kCtls[i].param == readoutParam) { name = kCtls[i].label; break; }
+        const char* unit = readoutParam == kSpeed ? " MS" : (readoutParam == kOutput ? " DB" : "");
+        if (readoutParam == kWow) name = "WOW & FLUT";
+        std::snprintf (text, sizeof (text), "%s   %s%s", name ? name : "", disp, unit);
+        for (char* q = text; *q; ++q) if (*q >= 'a' && *q <= 'z') *q = (char) (*q - 'a' + 'A');
+        drawText (text, boldFont (14.0), [NSColor blackColor], NSMidX (box), NSMidY (box));
+    }
+}
+
+- (void) drawPresets
+{
+    NSColor* ink = [NSColor blackColor];
+    drawText ("PRESETS", boldFont (10.0), ink, (NSMinX (kSaveRect) + NSMaxX (slotRect (kNumPresetSlots - 1))) * 0.5, 266);
+
+    // SAVE button: lit red while it is waiting for a slot
+    NSBezierPath* sp = [NSBezierPath bezierPathWithRoundedRect: kSaveRect xRadius: 3 yRadius: 3];
+    if (saveMode)
+    {
+        [rgb (200, 30, 30) set];
+        [sp fill];
+    }
+    else
+    {
+        NSGradient* g = [[[NSGradient alloc] initWithStartingColor: rgb (232, 234, 236) endingColor: rgb (160, 163, 167)] autorelease];
+        [g drawInBezierPath: sp angle: -90.0];
+    }
+    [rgb (40, 41, 43) set];
+    [sp setLineWidth: 1.0];
+    [sp stroke];
+    drawText ("SAVE", boldFont (11.0), saveMode ? [NSColor whiteColor] : ink, NSMidX (kSaveRect), NSMidY (kSaveRect));
+
+    // Slots: empty = silver, saved = charcoal, in use = lime green
+    for (int k = 0; k < kNumPresetSlots; ++k)
+    {
+        const NSRect r = slotRect (k);
+        NSBezierPath* bp = [NSBezierPath bezierPathWithRoundedRect: r xRadius: 3 yRadius: 3];
+        NSColor* fill = (k == activePreset) ? rgb (178, 245, 96) : (presetUsed[k] ? rgb (46, 47, 50) : rgb (214, 216, 219));
+        NSColor* text = (k == activePreset) ? ink : (presetUsed[k] ? [NSColor whiteColor] : rgb (120, 122, 126));
+        [fill set];
+        [bp fill];
+        [rgb (40, 41, 43) set];
+        [bp setLineWidth: 1.0];
+        [bp stroke];
+        char num[4];
+        std::snprintf (num, sizeof (num), "%d", k + 1);
+        drawText (num, boldFont (12.0), text, NSMidX (r), NSMidY (r));
+    }
+}
+
+- (void) drawRect: (NSRect) dirty
+{
+    (void) dirty;
+    [self drawBackground];
+    NSColor* ink = [NSColor blackColor];
+
+    for (int i = 0; i < kNumCtls; ++i)
+    {
+        const Ctl& c = kCtls[i];
+        switch (c.type)
+        {
+            case kCtlKnob:
+                [self drawScaleForCtl: c];
+                [self drawKnobAt: NSMakePoint (c.cx, c.cy) radius: c.r value: shown[c.param]];
+                drawText (c.label, boldFont (11.0), ink, c.cx, c.cy - c.r - 34.0);
+                break;
+            case kCtlPush:
+                [self drawPush: c];
+                break;
+            case kCtlRocker:
+                [self drawRocker: c];
+                break;
+            case kCtlSmallKnob:
+            {
+                [self drawKnobAt: NSMakePoint (c.cx, c.cy) radius: c.r value: shown[c.param]];
+                drawText (c.label, boldFont (10.0), ink, c.cx, c.cy - c.r - 14.0);
+                drawText (c.posA, plainFont (8.5), ink, c.cx - c.r - 16.0, c.cy + c.r - 2.0);
+                drawText (c.posB, plainFont (8.5), ink, c.cx + c.r + 16.0, c.cy + c.r - 2.0);
+                break;
+            }
+            default: break;
+        }
+    }
+    [self drawPresets];
+    [self drawReadout];
+}
+
+//------------------------------------------------------------------------------
+// Mouse
+
+- (int) ctlAtPoint: (NSPoint) p
+{
+    for (int i = 0; i < kNumCtls; ++i)
+    {
+        const Ctl& c = kCtls[i];
+        if (c.type == kCtlRocker)
+        {
+            if (std::fabs (p.x - c.cx) < 20 && std::fabs (p.y - c.cy) < 26) return i;
+        }
+        else if (c.type == kCtlPush)
+        {
+            if (std::fabs (p.x - c.cx) < c.r + 6 && std::fabs (p.y - c.cy) < c.r + 6) return i;
+        }
+        else
+        {
+            const CGFloat dx = p.x - c.cx, dy = p.y - c.cy;
+            if (dx * dx + dy * dy < (c.r + 8) * (c.r + 8)) return i;
+        }
+    }
+    return -1;
+}
+
+- (void) setParam: (int) param value: (float) v
+{
+    if (! host) return;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    host->guiSetParam (param, v);
+    shown[param] = host->getParam (param);
+    readoutParam = param;
+    [self setNeedsDisplay: YES];
+}
+
+// SAVE button and preset slots. Returns YES if the click was handled here.
+- (BOOL) presetClick: (NSPoint) p
+{
+    if (NSPointInRect (p, kSaveRect))
+    {
+        saveMode = ! saveMode;
+        std::snprintf (status, sizeof (status), "%s", saveMode ? "SAVE: CLICK A SLOT 1-8" : "");
+        [self setNeedsDisplay: YES];
+        return YES;
+    }
+    for (int k = 0; k < kNumPresetSlots; ++k)
+    {
+        if (! NSPointInRect (p, slotRect (k))) continue;
+        if (saveMode)
+        {
+            const bool ok = host->savePreset (k);
+            saveMode = false;
+            host->refreshPresets();
+            for (int j = 0; j < kNumPresetSlots; ++j) presetUsed[j] = host->presetExists (j);
+            if (ok) activePreset = k;
+            std::snprintf (status, sizeof (status), ok ? "PRESET %d SAVED" : "COULD NOT SAVE PRESET %d", k + 1);
+        }
+        else
+        {
+            host->refreshPresets();
+            for (int j = 0; j < kNumPresetSlots; ++j) presetUsed[j] = host->presetExists (j);
+            if (presetUsed[k] && host->loadPreset (k))
+            {
+                for (int j = 0; j < kNumParams; ++j) shown[j] = host->getParam (j);
+                activePreset = k;
+                std::snprintf (status, sizeof (status), "PRESET %d LOADED", k + 1);
+            }
+            else
+                std::snprintf (status, sizeof (status), "PRESET %d IS EMPTY", k + 1);
+        }
+        [self setNeedsDisplay: YES];
+        return YES;
+    }
+    return NO;
+}
+
+- (void) mouseDown: (NSEvent*) e
+{
+    const NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
+    if (! host) return;
+    if ([self presetClick: p]) return;
+    const int i = [self ctlAtPoint: p];
+    if (i < 0) return;
+    const Ctl& c = kCtls[i];
+    readoutParam = c.param;
+    status[0] = 0;
+    activePreset = -1;     // settings are being changed away from the preset
+
+    switch (c.type)
+    {
+        case kCtlRocker:
+        {
+            // Press the top half for ON, the bottom half for OFF
+            host->guiBeginEdit (c.param);
+            [self setParam: c.param value: (p.y < c.cy) ? 1.0f : 0.0f];
+            host->guiEndEdit (c.param);
+            return;
+        }
+        case kCtlPush:
+        {
+            host->guiBeginEdit (c.param);
+            [self setParam: c.param value: isOn (shown[c.param]) ? 0.0f : 1.0f];
+            host->guiEndEdit (c.param);
+            return;
+        }
+        default:
+            break;
+    }
+
+    host->guiBeginEdit (c.param);
+    if ([e clickCount] == 2)
+        [self setParam: c.param value: kDefaults[c.param]];   // double-click: back to default
+    dragCtl = i;
+    dragStartY = p.y;
+    dragStartValue = shown[c.param];
+    [self setNeedsDisplay: YES];
+}
+
+- (void) mouseDragged: (NSEvent*) e
+{
+    if (dragCtl < 0 || ! host) return;
+    const Ctl& c = kCtls[dragCtl];
+    const NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
+    const bool fine = ([e modifierFlags] & NSShiftKeyMask) != 0;
+    const CGFloat perPixel = fine ? 1.0 / 1000.0 : 1.0 / 200.0;
+    const CGFloat v = dragStartValue + (dragStartY - p.y) * perPixel;
+    [self setParam: c.param value: (float) v];
+}
+
+- (void) mouseUp: (NSEvent*) e
+{
+    (void) e;
+    if (dragCtl >= 0 && host) host->guiEndEdit (kCtls[dragCtl].param);
+    dragCtl = -1;
+}
+
+- (void) scrollWheel: (NSEvent*) e
+{
+    const NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
+    const int i = [self ctlAtPoint: p];
+    if (i < 0 || ! host) return;
+    const Ctl& c = kCtls[i];
+    if (c.type != kCtlKnob && c.type != kCtlSmallKnob) return;
+    const CGFloat d = [e deltaY];
+    if (d == 0.0) return;
+    status[0] = 0;
+    activePreset = -1;
+    host->guiBeginEdit (c.param);
+    [self setParam: c.param value: (float) (shown[c.param] + d * 0.01)];
+    host->guiEndEdit (c.param);
+}
+
+@end
+
+//==============================================================================
+namespace tbcc
+{
+
+// Both calls use their own autorelease pool, so nothing of this plugin's is
+// left waiting in the host's pool when the editor closes or the plugin unloads.
+void* editorOpen (void* parentView, EditorHost* host)
+{
+    NSView* parent = (NSView*) parentView;
+    if (! parent || ! host) return 0;
+    NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+    TBCopicatPanelView* v = [[TBCopicatPanelView alloc]
+                                  initWithFrame: NSMakeRect (0, 0, kEditorWidth, kEditorHeight) host: host];
+    if (v) [parent addSubview: v];
+    [pool release];
+    return (void*) v;    // retained until editorClose
+}
+
+void editorClose (void* handle)
+{
+    TBCopicatPanelView* v = (TBCopicatPanelView*) handle;
+    if (! v) return;
+    NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+    [v shutdown];
+    [v removeFromSuperview];
+    [v release];
+    [pool release];
+}
+
+} // namespace tbcc
