@@ -196,6 +196,15 @@ int main (int argc, char** argv)
     NSData* pngAfter = renderPNG (panel, dir + "/panel_changed.png");
     check (! [pngAfter isEqualToData: pngDefault], "panel redraws after host changes");
 
+    // The tape loop animates on its own
+    {
+        pump (0.2);
+        NSData* f1 = renderPNG (panel, dir + "/panel_anim_a.png");
+        pump (0.4);
+        NSData* f2 = renderPNG (panel, dir + "/panel_anim_b.png");
+        check (! [f1 isEqualToData: f2], "tape loop animates");
+    }
+
     // A showcase render: multi-head repeats
     e->setParameter (e, kGain, 0.6f);
     e->setParameter (e, kSwell, 0.65f);

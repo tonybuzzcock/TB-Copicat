@@ -60,6 +60,13 @@ const NSRect kSaveRect = { { 500.0, 284.0 }, { 54.0, 24.0 } };
 const CGFloat kSlotX0 = 564.0, kSlotPitch = 27.0, kSlotW = 24.0, kSlotY = 284.0, kSlotH = 24.0;
 const NSRect kReadoutRect = { { 792.0, 276.0 }, { 234.0, 40.0 } };
 
+// Animated tape loop, top centre above the head buttons: a reel and a capstan
+const NSRect kSpoolRect = { { 560.0, 31.0 }, { 160.0, 56.0 } };
+const CGFloat kReelX = 597.0, kReelY = 59.0, kReelR = 18.0;
+const CGFloat kCapX = 688.0, kCapY = 59.0, kCapR = 9.0;
+const double kTapePxPerSec = 36.0;     // on-screen tape speed at normal Speed
+const double kFrameRate = 30.0;
+
 inline NSRect slotRect (int k) { return NSMakeRect (kSlotX0 + k * kSlotPitch, kSlotY, kSlotW, kSlotH); }
 const int kNumCtls = (int) (sizeof (kCtls) / sizeof (kCtls[0]));
 
@@ -143,6 +150,8 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
     int activePreset;
     bool presetUsed[kNumPresetSlots];
     char status[64];
+    double tapePx;       // how far the tape has moved, in pixels
+    double wobPh;
 }
 - (id) initWithFrame: (NSRect) frame host: (EditorHost*) h;
 - (void) shutdown;
@@ -162,9 +171,11 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
         saveMode = false;
         activePreset = -1;
         status[0] = 0;
+        tapePx = 0.0;
+        wobPh = 0.0;
         host->refreshPresets();
         for (int k = 0; k < kNumPresetSlots; ++k) presetUsed[k] = host->presetExists (k);
-        timer = [[NSTimer timerWithTimeInterval: 1.0 / 20.0 target: self selector: @selector (tick:)
+        timer = [[NSTimer timerWithTimeInterval: 1.0 / kFrameRate target: self selector: @selector (tick:)
                                        userInfo: nil repeats: YES] retain];
         [[NSRunLoop currentRunLoop] addTimer: timer forMode: NSDefaultRunLoopMode];
         [[NSRunLoop currentRunLoop] addTimer: timer forMode: NSEventTrackingRunLoopMode];
@@ -200,6 +211,15 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
         if (v != shown[i]) { shown[i] = v; changed = true; }
     }
     if (changed) [self setNeedsDisplay: YES];
+
+    // Move the tape: Speed sets the pace, Wow & Flutter makes it waver
+    const double speed = std::pow (1.35, 2.0 * shown[kSpeed] - 1.0);
+    wobPh += 0.55 / kFrameRate;
+    if (wobPh >= 1.0) wobPh -= 1.0;
+    const double wob = 1.0 + 0.06 * shown[kWow] * std::sin (2.0 * M_PI * wobPh);
+    tapePx += kTapePxPerSec * speed * wob / kFrameRate;
+    if (tapePx > 1.0e6) tapePx -= 1.0e6;
+    if (! changed) [self setNeedsDisplayInRect: kSpoolRect];
 }
 
 //------------------------------------------------------------------------------
@@ -468,10 +488,91 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
     }
 }
 
+// The tape loop: brown tape round a spoked reel and a capstan with its rubber
+// roller, three small heads under the top run (lit orange when their button is in).
+- (void) drawSpool
+{
+    NSColor* tapeCol = rgb (96, 56, 28);
+
+    // Tape path: half way round the reel's left side, across, round the capstan's right side, back
+    NSBezierPath* tape = [NSBezierPath bezierPath];
+    [tape appendBezierPathWithArcWithCenter: NSMakePoint (kReelX, kReelY) radius: kReelR + 1.5
+                                 startAngle: 270.0 endAngle: 90.0 clockwise: YES];
+    [tape lineToPoint: NSMakePoint (kCapX, kCapY + kCapR + 1.5)];
+    [tape appendBezierPathWithArcWithCenter: NSMakePoint (kCapX, kCapY) radius: kCapR + 1.5
+                                 startAngle: 90.0 endAngle: 270.0 clockwise: YES];
+    [tape closePath];
+
+    // Heads under the top run of tape
+    const CGFloat headX[3] = { 625.0, 643.0, 661.0 };
+    for (int i = 0; i < 3; ++i)
+    {
+        const CGFloat t = (headX[i] - kReelX) / (kCapX - kReelX);
+        const CGFloat runY = (kReelY - kReelR - 1.5) + t * ((kCapY - kCapR - 1.5) - (kReelY - kReelR - 1.5));
+        const NSRect hr = NSMakeRect (headX[i] - 5.0, runY + 1.0, 10.0, 9.0);
+        NSBezierPath* hp = [NSBezierPath bezierPathWithRoundedRect: hr xRadius: 1.5 yRadius: 1.5];
+        const bool on = isOn (shown[kHead1 + i]);
+        [(on ? rgb (240, 130, 30) : rgb (72, 74, 78)) set];
+        [hp fill];
+        [rgb (30, 31, 33) set];
+        [hp setLineWidth: 0.6];
+        [hp stroke];
+    }
+
+    [tapeCol set];
+    [tape setLineWidth: 3.0];
+    [tape stroke];
+    // Moving texture on the tape so it visibly runs
+    NSBezierPath* tex = [[tape copy] autorelease];
+    const CGFloat dash[2] = { 3.0, 6.0 };
+    [tex setLineDash: dash count: 2 phase: (CGFloat) -std::fmod (tapePx, 9.0)];
+    [rgb (150, 98, 58) set];
+    [tex setLineWidth: 1.4];
+    [tex stroke];
+
+    // Reel: silver disc, dark rim, three spokes turning with the tape
+    NSBezierPath* disc = [NSBezierPath bezierPathWithOvalInRect: NSMakeRect (kReelX - kReelR, kReelY - kReelR, 2 * kReelR, 2 * kReelR)];
+    NSGradient* g = [[[NSGradient alloc] initWithStartingColor: rgb (226, 228, 231) endingColor: rgb (150, 153, 158)] autorelease];
+    [g drawInBezierPath: disc angle: -60.0];
+    [rgb (55, 57, 60) set];
+    [disc setLineWidth: 1.0];
+    [disc stroke];
+    const CGFloat reelA = (CGFloat) (tapePx / kReelR);
+    for (int k = 0; k < 3; ++k)
+    {
+        const CGFloat a = reelA + (CGFloat) (k * 2.0 * M_PI / 3.0);
+        NSBezierPath* sp = [NSBezierPath bezierPath];
+        [sp moveToPoint: polar (kReelX, kReelY, 4.0, a)];
+        [sp lineToPoint: polar (kReelX, kReelY, kReelR - 3.0, a)];
+        [sp setLineWidth: 2.2];
+        [sp setLineCapStyle: NSRoundLineCapStyle];
+        [rgb (80, 82, 86) set];
+        [sp stroke];
+    }
+    [rgb (40, 41, 43) set];
+    [[NSBezierPath bezierPathWithOvalInRect: NSMakeRect (kReelX - 3.5, kReelY - 3.5, 7.0, 7.0)] fill];
+
+    // Capstan: black rubber roller with a silver shaft and a turning mark
+    [rgb (28, 28, 30) set];
+    [[NSBezierPath bezierPathWithOvalInRect: NSMakeRect (kCapX - kCapR, kCapY - kCapR, 2 * kCapR, 2 * kCapR)] fill];
+    [rgb (190, 193, 197) set];
+    [[NSBezierPath bezierPathWithOvalInRect: NSMakeRect (kCapX - 2.5, kCapY - 2.5, 5.0, 5.0)] fill];
+    const NSPoint m = polar (kCapX, kCapY, kCapR - 2.5, (CGFloat) (tapePx / kCapR));
+    [rgb (120, 122, 126) set];
+    [[NSBezierPath bezierPathWithOvalInRect: NSMakeRect (m.x - 1.3, m.y - 1.3, 2.6, 2.6)] fill];
+}
+
 - (void) drawRect: (NSRect) dirty
 {
-    (void) dirty;
+    // Animation frames only touch the tape loop: redraw just that corner
+    if (NSContainsRect (kSpoolRect, dirty))
+    {
+        [self drawBackground];
+        [self drawSpool];
+        return;
+    }
     [self drawBackground];
+    [self drawSpool];
     NSColor* ink = [NSColor blackColor];
 
     for (int i = 0; i < kNumCtls; ++i)
