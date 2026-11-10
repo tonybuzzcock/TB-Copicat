@@ -1,7 +1,7 @@
 // PanelView.mm
 // The custom panel for TB Copicat IC300: an original design laid out like the
 // echo unit's controls. Opaque silver, black lettering, grey knurled knobs with
-// a red position line, three latching head buttons, rocker switches for Tone
+// red tops and a white position line, three latching head buttons, rocker switches for Tone
 // and Echo in/out, and a strip of tape-transport controls, presets and the
 // readout along the bottom.
 //
@@ -307,7 +307,7 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
     }
 }
 
-// Grey knurled knob with a red position line.
+// Grey knurled knob, red top, white position line.
 - (void) drawKnobAt: (NSPoint) ctr radius: (CGFloat) r value: (CGFloat) v
 {
     // Drop shadow
@@ -340,22 +340,22 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
 
     // Top cap
     const CGFloat rc = r * 0.78;
-    NSGradient* cap = [[[NSGradient alloc] initWithStartingColor: rgb (172, 175, 179)
-                                                     endingColor: rgb (104, 107, 111)] autorelease];
+    NSGradient* cap = [[[NSGradient alloc] initWithStartingColor: rgb (228, 52, 46)
+                                                     endingColor: rgb (150, 18, 16)] autorelease];   // red top
     NSBezierPath* capPath = [NSBezierPath bezierPathWithOvalInRect: NSMakeRect (ctr.x - rc, ctr.y - rc, 2 * rc, 2 * rc)];
     [cap drawInBezierPath: capPath angle: -60.0];
-    [rgb (70, 72, 75) set];
+    [rgb (90, 14, 12) set];
     [capPath setLineWidth: 0.8];
     [capPath stroke];
 
-    // Red position line
+    // White position line
     const CGFloat a = valueAngle (v);
     NSBezierPath* line = [NSBezierPath bezierPath];
     [line moveToPoint: polar (ctr.x, ctr.y, r * 0.18, a)];
     [line lineToPoint: polar (ctr.x, ctr.y, r * 0.98, a)];
     [line setLineWidth: r > 18.0 ? 3.0 : 2.4];
     [line setLineCapStyle: NSRoundLineCapStyle];
-    [rgb (200, 30, 30) set];
+    [rgb (250, 250, 250) set];
     [line stroke];
 }
 
