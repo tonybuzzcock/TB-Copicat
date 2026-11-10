@@ -330,7 +330,7 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
     [line stroke];
 }
 
-// Latching push button (head select): a cream cap in a dark well; pressed in = head on.
+// Latching push button (head select): cream cap when out, orange when pressed in (head on).
 - (void) drawPush: (const Ctl&) c
 {
     NSColor* ink = [NSColor blackColor];
@@ -354,7 +354,7 @@ void drawTextLeft (const char* s, NSFont* font, NSColor* color, CGFloat x, CGFlo
         [sh set];
     }
     NSGradient* g = in
-        ? [[[NSGradient alloc] initWithStartingColor: rgb (206, 200, 184) endingColor: rgb (186, 180, 164)] autorelease]
+        ? [[[NSGradient alloc] initWithStartingColor: rgb (255, 160, 60) endingColor: rgb (222, 112, 20)] autorelease]   // pressed in: orange
         : [[[NSGradient alloc] initWithStartingColor: rgb (246, 242, 230) endingColor: rgb (208, 202, 186)] autorelease];
     [g drawInBezierPath: cp angle: -90.0];
     [NSGraphicsContext restoreGraphicsState];
