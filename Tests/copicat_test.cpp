@@ -124,11 +124,11 @@ static double peakTimeMs (const std::vector<float>& x, double fromMs, double toM
 static double echoRelDb (CopicatEcho& a, double f, double amp)
 {
     a.reset();
-    std::vector<float> o = run (a, burst (f, amp, 0.06, 0.4));
+    std::vector<float> o = run (a, burst (f, amp, 0.03, 0.4));
     const double lat = 1000.0 * CopicatEcho::latencySamples() / kSr;
     const double t1 = a.headDelayMs (0);
-    const double dry = peakRange (o, 0, (size_t) ((70.0 + lat) * kSr / 1000.0));
-    const double echo = peakRange (o, (size_t) ((t1 + lat - 10.0) * kSr / 1000.0), (size_t) ((t1 + lat + 75.0) * kSr / 1000.0));
+    const double dry = peakRange (o, 0, (size_t) ((35.0 + lat) * kSr / 1000.0));
+    const double echo = peakRange (o, (size_t) ((t1 + lat - 5.0) * kSr / 1000.0), (size_t) ((t1 + lat + 40.0) * kSr / 1000.0));
     return 20.0 * std::log10 (echo / dry);
 }
 
@@ -239,7 +239,7 @@ int main (int argc, char** argv)
         setAll (a, 0.6, 0.8, 0.0, true, false, false, false, true, 1.0, 0.0, 0.0);
         const double fast = a.headDelayMs (0);
         std::printf ("  Speed 0 -> head 1 at %.1f ms, Speed 10 -> %.1f ms\n", slow, fast);
-        check (slow > 140.0 && fast < 85.0, "Speed trim slows and speeds the tape");
+        check (std::fabs (slow - 1000.0 * kHeadSeconds[0] * 1.35) < 2.0 && std::fabs (fast - 1000.0 * kHeadSeconds[0] / 1.35) < 2.0, "Speed trim slows and speeds the tape");
     }
 
     std::printf ("\n3. Echo level and tone (echo relative to dry, head 1)\n");
@@ -290,8 +290,9 @@ int main (int argc, char** argv)
 
         setAll (a, 0.6, 0.6, 0.45, true, false, false, false, true, 0.5, 0.0, 0.0);
         std::vector<float> o = run (a, burst (800.0, 0.1, 0.03, 2.5));
-        const double r1 = peakRange (o, (size_t) (0.09 * kSr), (size_t) (0.19 * kSr));
-        const double r5 = peakRange (o, (size_t) (0.53 * kSr), (size_t) (0.63 * kSr));
+        const double t = kHeadSeconds[0] + latMs / 1000.0, w = 0.4 * kHeadSeconds[0];
+        const double r1 = peakRange (o, (size_t) ((1.0 * t - w) * kSr), (size_t) ((1.0 * t + w) * kSr));
+        const double r5 = peakRange (o, (size_t) ((5.0 * kHeadSeconds[0] + latMs / 1000.0 - w) * kSr), (size_t) ((5.0 * kHeadSeconds[0] + latMs / 1000.0 + w) * kSr));
         std::printf ("  repeat 1 %.4f, repeat 5 %.4f\n", r1, r5);
         check (r5 < r1 * 0.5 && r5 > r1 * 0.002, "repeats die away at a medium setting");
 

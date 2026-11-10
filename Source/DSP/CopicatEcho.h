@@ -12,7 +12,7 @@
 //
 // The op-amp stages are linear apart from their rails and slew rate, so each is
 // its exact component transfer function rather than a nodal Newton solve.
-// The tape transport is not on the drawing: head times (110/220/330 ms) and
+// The tape transport is not on the drawing: head times (70/220/330 ms) and
 // tape speed (9.5 cm/s) are estimates.
 //
 // Volts in, volts out scaled so the dry signal is unity at the default Gain.
@@ -27,10 +27,10 @@
 namespace tbcc
 {
 
-// Estimated echo times at normal speed (the IC300's head spacing is not on the
-// drawing): heads evenly spaced after the record head. The Speed trim scales
-// them by 1 / (0.74x .. 1.35x).
-const double kHeadSeconds[3] = { 0.110, 0.220, 0.330 };
+// Echo times at normal speed (the IC300's head spacing is not on the drawing):
+// head 1 set to 70 ms by the owner, heads 2 and 3 estimated. The Speed trim
+// scales them by 1 / (0.74x .. 1.35x).
+const double kHeadSeconds[3] = { 0.070, 0.220, 0.330 };
 
 class CopicatEcho
 {

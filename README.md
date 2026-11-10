@@ -15,10 +15,10 @@ circuit drawing (drawing no. 577, 27-6-79, in `Docs/`).
 | 1 | Gain | Input gain (stands in for the four input pots) | 0 – 10 |
 | 2 | Swell | Echo level | 0 – 10 |
 | 3 | Sustain | Repeats (playback fed back to the record amp); runs away above about 8.5 | 0 – 10 |
-| 4–6 | Head 1/2/3 | Playback head buttons, any combination: button 1 = nearest head (110 ms), 2 = middle (220 ms), 3 = farthest (330 ms) | In / Out |
+| 4–6 | Head 1/2/3 | Playback head buttons, any combination: button 1 = nearest head (70 ms), 2 = middle (220 ms), 3 = farthest (330 ms) | In / Out |
 | 7 | Tone | Tone switch (the 4n7 across the heads): On is darker | Off / On |
 | 8 | Echo | Echo in/out | In / Out |
-| 9 | Speed | *plugin only*: tape speed trim, shown as button 1's echo time | 149 – 81 ms |
+| 9 | Speed | *plugin only*: tape speed trim, shown as button 1's echo time | 95 – 52 ms |
 | 10 | Wow&Flut | *plugin only*: wow and flutter | 0 – 10 |
 | 11 | Tape Age | *plugin only*: worn tape: duller, more hiss and dropouts, a bigger splice bump | 0 – 10 |
 | 12 | Output | *plugin only*: output trim | ±24 dB |
@@ -38,7 +38,7 @@ From the drawing:
 - 741 rail clipping and slew rate; the drawing's 1.7 V record and 90 mV playback levels set the tape calibration
 
 Not on the drawing, so estimated:
-- **head times 110 / 220 / 330 ms** at normal speed, tape speed 9.5 cm/s and a 60 cm loop
+- **head times**: button 1 = 70 ms (set by the owner), buttons 2 and 3 = 220 / 330 ms (estimated) at normal speed, tape speed 9.5 cm/s and a 60 cm loop
 - tape saturation, coating-thickness, gap and spacing losses, hiss, dropouts and the splice
 
 The echo times are the easiest thing to change if they don't match a real unit

@@ -108,7 +108,7 @@ int main (int argc, char** argv)
     const char* expectNames[12] = { "Gain", "Swell", "Sustain", "Head 1", "Head 2", "Head 3", "Tone", "Echo",
                                     "Speed", "Wow&Flut", "Tape Age", "Output" };
     const char* expectDisp[12]  = { "6.0", "5.5", "4.5", "In", "Out", "Out", "Off", "In",
-                                    "110", "3.0", "2.5", "+0.0" };
+                                    "70", "3.0", "2.5", "+0.0" };
     for (int i = 0; i < 12; ++i)
     {
         char name[64] = { 0 }, disp[64] = { 0 }, label[64] = { 0 };
@@ -128,7 +128,7 @@ int main (int argc, char** argv)
     e->setParameter (e, 8, 0.0f);
     std::memset (buf, 0, sizeof (buf));
     call (e, effGetParamDisplay, 8, 0, buf);
-    check (std::fabs (std::atof (buf) - 148.5) < 1.0, "Speed shows head 1's echo time (slowest ~149 ms)");
+    check (std::fabs (std::atof (buf) - 94.5) < 1.0, "Speed shows head 1's echo time (slowest ~95 ms)");
     std::memset (buf, 0, sizeof (buf));
     call (e, effGetParamLabel, 8, 0, buf);
     check (std::strcmp (buf, "ms") == 0, "Speed label is ms");
@@ -224,7 +224,7 @@ int main (int argc, char** argv)
 
     // Each panel button plays the head the owner's unit has behind it
     {
-        const double expectMs[3] = { 110.0, 220.0, 330.0 };
+        const double expectMs[3] = { 70.0, 220.0, 330.0 };
         e->setParameter (e, 2, 0.0f);      // no repeats
         e->setParameter (e, 9, 0.0f);      // no wow, so the echo lands exactly
         for (int b = 0; b < 3; ++b)
