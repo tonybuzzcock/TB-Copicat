@@ -250,7 +250,8 @@ int main (int argc, char** argv)
         std::printf ("  default tape, Tone off:");
         for (int i = 0; i < 8; ++i) { r[i] = echoRelDb (a, fr[i], 0.02); std::printf (" %.0f:%+.1f", fr[i], r[i]); }
         std::printf ("\n");
-        check (r[0] < r[3] - 6.0 && r[7] < r[4], "echo is band-limited like tape (bass and top rolled off)");
+        check (std::fabs (r[1] - r[3]) < 3.0 && std::fabs (r[2] - r[3]) < 2.0, "echo keeps its body: flat from 200 Hz to 1 kHz");
+        check (r[7] < r[4] - 6.0, "and the top rolls off like tape");
         setAll (a, 0.6, 0.55, 0.0, true, false, false, true, true, 0.5, 0.0, 0.25);
         const double t5 = echoRelDb (a, 5000.0, 0.02);
         std::printf ("  Tone on, 5 kHz: %+.1f dB\n", t5);
@@ -286,7 +287,24 @@ int main (int argc, char** argv)
             if (a.sustainLoopGain() >= 1.0) { thresh = k / 10.0; break; }
         }
         std::printf ("  self-oscillation starts near Sustain %.1f\n", thresh);
-        check (thresh > 5.5 && thresh < 9.5, "runaway point high on the dial");
+        check (thresh > 9.0 && thresh < 9.8, "runaway only near the top of the dial (about 9.4)");
+
+        // Repeats of a low guitar note (196 Hz) at Sustain 5, 7 and 8
+        const double knobs[3] = { 0.5, 0.7, 0.8 };
+        double keep[3];
+        for (int k = 0; k < 3; ++k)
+        {
+            setAll (a, 0.6, 0.6, knobs[k], false, true, false, false, true, 0.5, 0.0, 0.25);   // head 2, 220 ms
+            std::vector<float> o = run (a, burst (196.0, 0.1, 0.06, 4.0));
+            const double t = kHeadSeconds[1], l = latMs / 1000.0;
+            const double p1 = peakRange (o, (size_t) ((t + l - 0.03) * kSr), (size_t) ((t + l + 0.09) * kSr));
+            const double p10 = peakRange (o, (size_t) ((10 * t + l - 0.03) * kSr), (size_t) ((10 * t + l + 0.09) * kSr));
+            keep[k] = 20.0 * std::log10 (p10 / p1);
+            std::printf ("  Sustain %.0f: repeat 10 is %+.1f dB from repeat 1\n", knobs[k] * 10.0, keep[k]);
+        }
+        check (keep[0] < -25.0 && keep[0] > -60.0, "Sustain 5: repeats fade over several passes");
+        check (keep[1] > -32.0 && keep[1] < -18.0, "Sustain 7: about ten repeats, then fading");
+        check (keep[2] > -20.0, "Sustain 8: repeats keep going");
 
         setAll (a, 0.6, 0.6, 0.45, true, false, false, false, true, 0.5, 0.0, 0.0);
         std::vector<float> o = run (a, burst (800.0, 0.1, 0.03, 2.5));
@@ -294,7 +312,7 @@ int main (int argc, char** argv)
         const double r1 = peakRange (o, (size_t) ((1.0 * t - w) * kSr), (size_t) ((1.0 * t + w) * kSr));
         const double r5 = peakRange (o, (size_t) ((5.0 * kHeadSeconds[0] + latMs / 1000.0 - w) * kSr), (size_t) ((5.0 * kHeadSeconds[0] + latMs / 1000.0 + w) * kSr));
         std::printf ("  repeat 1 %.4f, repeat 5 %.4f\n", r1, r5);
-        check (r5 < r1 * 0.5 && r5 > r1 * 0.002, "repeats die away at a medium setting");
+        check (r5 < r1 * 0.7 && r5 > r1 * 0.02, "repeats die away at a medium setting");
 
         setAll (a, 0.6, 0.6, 1.0, true, true, true, false, true, 0.5, 0.5, 0.3);
         o = run (a, burst (800.0, 0.1, 0.03, 8.0));
@@ -393,10 +411,11 @@ int main (int argc, char** argv)
         struct Demo { const char* file; double gain, swell, sustain; bool h1, h2, h3, tone; double speed, wow, age; };
         const Demo demos[] = {
             { "copicat_head1_slapback.wav",   0.6, 0.55, 0.30, true,  false, false, false, 0.5, 0.3, 0.25 },
-            { "copicat_heads123_repeats.wav", 0.6, 0.60, 0.50, true,  true,  true,  false, 0.5, 0.3, 0.25 },
+            { "copicat_heads123_repeats.wav", 0.6, 0.60, 0.60, true,  true,  true,  false, 0.5, 0.3, 0.25 },
             { "copicat_head3_tone_on.wav",    0.6, 0.60, 0.55, false, false, true,  true,  0.5, 0.3, 0.25 },
             { "copicat_old_tape_wobbly.wav",  0.6, 0.65, 0.55, true,  false, true,  false, 0.4, 0.9, 0.85 },
-            { "copicat_runaway.wav",          0.7, 0.60, 0.82, true,  true,  false, false, 0.5, 0.4, 0.30 },
+            { "copicat_head3_sustain7.wav",   0.6, 0.60, 0.70, false, false, true,  false, 0.5, 0.3, 0.25 },
+            { "copicat_runaway.wav",          0.7, 0.60, 0.96, true,  true,  false, false, 0.5, 0.4, 0.30 },
         };
         std::vector<float> line = makeLine (9.0);
         for (size_t d = 0; d < sizeof (demos) / sizeof (demos[0]); ++d)

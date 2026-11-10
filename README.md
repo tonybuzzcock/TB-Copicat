@@ -14,7 +14,7 @@ circuit drawing (drawing no. 577, 27-6-79, in `Docs/`).
 |---|------|---------|-------|
 | 1 | Gain | Input gain (stands in for the four input pots) | 0 – 10 |
 | 2 | Swell | Echo level | 0 – 10 |
-| 3 | Sustain | Repeats (playback fed back to the record amp); runs away above about 8.5 | 0 – 10 |
+| 3 | Sustain | Repeats (playback fed back to the record amp): about 4 repeats at 5, about 10 at 7, long and steady at 9, runs away near 9.5 | 0 – 10 |
 | 4–6 | Head 1/2/3 | Playback head buttons, any combination: button 1 = nearest head (70 ms), 2 = middle (220 ms), 3 = farthest (330 ms) | In / Out |
 | 7 | Tone | Tone switch (the 4n7 across the heads): On is darker | Off / On |
 | 8 | Echo | Echo in/out | In / Out |
@@ -33,8 +33,8 @@ From the drawing:
 - the 741 record amp (560K over 15K), with the Sustain feedback joining its summing node
 - three playback heads in series on push buttons (unselected heads are shorted, so
   more heads means more inductance and a darker echo, especially with Tone on)
-- the 741 playback preamp, read as 3K3 to ground and 120K || 470p || (33K + .022µ) in feedback
-- the Swell and Sustain 10K log pots, and the 741 output mixer (dry 27K, echo 10K, 47K || 100p)
+- the 741 playback preamp, whose time constants (153K × .022µ, 120K × 470p) give the standard tape playback curve: flat from about 50 Hz to 3 kHz per pass
+- the Swell 10K log pot, the Sustain pot (its curve set by ear against a real unit), and the 741 output mixer (dry 27K, echo 10K, 47K || 100p)
 - 741 rail clipping and slew rate; the drawing's 1.7 V record and 90 mV playback levels set the tape calibration
 
 Not on the drawing, so estimated:

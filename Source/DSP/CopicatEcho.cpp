@@ -24,7 +24,7 @@ namespace
     // Output mixer: dry 27K, echo 10K, 47K||100p feedback
     const double kRdry = 27.0e3, kRf4 = 47.0e3, kCf4 = 100.0e-12;
     // Playback preamp: 3K3 to ground, feedback 120K || 470p || (33K + .022u)
-    const double kRg = 3.3e3, kRp1 = 120.0e3, kCp1 = 470.0e-12, kRp2 = 33.0e3, kCp2 = 0.022e-6;
+    const double kRp1 = 120.0e3, kCp1 = 470.0e-12, kRp2 = 33.0e3, kCp2 = 0.022e-6;
 
     // Levels marked on the drawing: 1.7 V at the record amp, 90 mV from the playback amp
     const double kNominalRec  = 1.7;
@@ -93,6 +93,20 @@ double CopicatEcho::inputGain (double pot) const
     return (kRf1 / kRsum) * rp / (kRin + rTop + rp);
 }
 
+double CopicatEcho::sustainGain (double pot) const
+{
+    // Loop gain (at 1 kHz, nominal level) against Sustain rotation, set by ear
+    // against the owner's unit: a couple of repeats low down, 8-10 strong repeats
+    // around 7, long near-steady repeats around 9, runaway only near the top.
+    static const double kLoop[11] = { 0.0, 0.05, 0.12, 0.20, 0.32, 0.47, 0.60, 0.72, 0.84, 0.95, 1.08 };
+    if (pot <= 0.0) return 0.0;
+    if (pot >= 1.0) return kLoop[10] * kNominalRec / kNominalPlay;
+    const double x = pot * 10.0;
+    const int i = (int) x;
+    const double g = kLoop[i] + (kLoop[i + 1] - kLoop[i]) * (x - i);
+    return g * kNominalRec / kNominalPlay;
+}
+
 double CopicatEcho::potToMixer (double pot, double rSeries, double rFeedback) const
 {
     const double rBot = kPot10 * audioTaper (pot), rTop = kPot10 - rBot;
@@ -118,14 +132,14 @@ void CopicatEcho::prepare (double sampleRate)
     mixLp.lowpass (1.0 / (2.0 * kPi * kRf4 * kCf4), fsOs);
     outHp.highpass (5.0, fsOs);
 
-    // Playback preamp, non-inverting: G = 1 + Zf / Rg
-    //   Yf = 1/R1 + s C1 + s C2 / (1 + s R2 C2)
+    // Playback preamp: the network's time constants, (120K + 33K) x .022u = 3.37 ms
+    // and 120K x 470p = 56 us, are the standard tape playback curve
+    // (3180 us / 50 us). With the head's rising output that gives a flat response
+    // from about 50 Hz to 3 kHz, so each repeat keeps its body. (3K3 sets the gain,
+    // which the 1.7 V / 90 mV calibration below takes care of.)
     {
-        const double R1 = kRp1, C1 = kCp1, R2 = kRp2, C2 = kCp2, Rg = kRg;
-        const double d2 = Rg * C1 * R2 * C2;
-        const double d1 = Rg * (R2 * C2 / R1 + C1 + C2);
-        const double d0 = Rg / R1;
-        playEq.setAnalog (d2, d1 + R2 * C2, d0 + 1.0, d2, d1, d0, fsOs);
+        const double T1 = (kRp1 + kRp2) * kCp2, T2 = kRp1 * kCp1;
+        playEq.setAnalog (0.0, T2, 1.0, 0.0, T1, 1.0, fsOs);
     }
 
     slew1.step = slew2.step = kSlewRate / fsOs;
@@ -177,7 +191,7 @@ void CopicatEcho::reset()
     }
     kIn = inputGain (gain);
     kSwell = potToMixer (swell, kRwiper, kRf4);
-    kSustain = potToMixer (sustain, kRwiper, kRf2);
+    kSustain = sustainGain (sustain);
     updateFilters (true);
     filterCountdown = 0;
     peakTape = 0.0;
@@ -374,7 +388,7 @@ void CopicatEcho::process (const float* in, float* out, int numSamples)
 
         kIn = inputGain (gain);
         kSwell = potToMixer (swell, kRwiper, kRf4);
-        kSustain = potToMixer (sustain, kRwiper, kRf2);
+        kSustain = sustainGain (sustain);
 
         if (--filterCountdown <= 0) { updateFilters (false); filterCountdown = 16; }
         tickModulation();

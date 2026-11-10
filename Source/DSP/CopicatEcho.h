@@ -7,8 +7,9 @@
 //      spacing losses, dropouts and the splice, wow and flutter
 //   -> three playback heads on push buttons, in series (unselected heads shorted,
 //      so the head inductance and the Tone switch's 4n7 interact)
-//   -> 741 playback preamp (3K3 / 120K || 470p || (33K + .022u))
-//   -> Swell and Sustain pots (10K) -> 741 output mixer (dry 27K, echo 10K, 47K||100p)
+//   -> 741 playback preamp (its time constants give the standard tape playback curve)
+//   -> Swell (10K log) and Sustain (curve set by ear against the owner's unit)
+//      -> 741 output mixer (dry 27K, echo 10K, 47K||100p)
 //
 // The op-amp stages are linear apart from their rails and slew rate, so each is
 // its exact component transfer function rather than a nodal Newton solve.
@@ -76,6 +77,7 @@ private:
     double nextNoise();
     double inputGain (double pot) const;
     double potToMixer (double pot, double rSeries, double rFeedback) const;
+    double sustainGain (double pot) const;
 
     double fsBase, fsOs;
     Oversampler4x up, down;
