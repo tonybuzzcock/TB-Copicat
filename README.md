@@ -61,7 +61,7 @@ are shared by every instance, in
 
 ## Install
 
-1. GitHub → Actions → latest run → Artifacts → `TB-Copicat-IC300-mac-vst`
+1. GitHub → Actions → latest run → Artifacts → `TB-Copicat-mountain-lion-vst`
 2. Unzip twice to get `TB Copicat IC300.vst`
 3. Copy it to `/Library/Audio/Plug-Ins/VST/` and rescan in PatchWork
 

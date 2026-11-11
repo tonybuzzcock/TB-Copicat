@@ -4,7 +4,7 @@
 # libraries that exist on 10.8. Run on macOS (GitHub's Intel runner or any Mac
 # with Xcode command line tools):
 #
-#   scripts/build_vst_mac.sh   -> "build/TB Copicat IC300.vst", build/TB-Copicat-IC300-mac-vst.zip
+#   scripts/build_vst_mac.sh   -> "build/TB Copicat IC300.vst", build/TB-Copicat-mountain-lion-vst.zip
 
 set -euo pipefail
 
@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 OUT=build
 NAME="TB Copicat IC300"
 EXE=TBCopicatIC300
-ZIP=TB-Copicat-IC300-mac-vst.zip
+ZIP=TB-Copicat-mountain-lion-vst.zip
 BUNDLE="$OUT/$NAME.vst"
 MIN_OS=10.8
 
